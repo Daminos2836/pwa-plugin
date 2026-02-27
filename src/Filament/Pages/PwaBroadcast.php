@@ -6,7 +6,6 @@ use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -14,7 +13,6 @@ use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Contracts\HasSchemas;
-use Filament\Support\Enums\IconSize;
 use Illuminate\Support\Facades\Schema;
 use PwaPlugin\Models\PwaPushSubscription;
 use PwaPlugin\Services\PwaPushService;
@@ -137,6 +135,7 @@ class PwaBroadcast extends Page implements HasSchemas
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.vapid_missing'))->danger()->send();
             return;
         }
+
         $vapid = [
             'subject' => $vapidSubject,
             'publicKey' => $vapidPublic,
