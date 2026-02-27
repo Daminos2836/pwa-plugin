@@ -115,16 +115,19 @@ class PwaBroadcast extends Page implements HasSchemas
     {
         if (!Schema::hasTable('pwa_push_subscriptions')) {
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.table_missing'))->danger()->send();
+
             return;
         }
 
         if (!$push->canSend()) {
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.library_missing'))->danger()->send();
+
             return;
         }
 
         if (!(bool) $settings->get('push_enabled', config('pwa-plugin.push_enabled', false))) {
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.push_disabled'))->warning()->send();
+
             return;
         }
 
@@ -133,6 +136,7 @@ class PwaBroadcast extends Page implements HasSchemas
         $vapidPrivate = (string) $settings->get('vapid_private_key', config('pwa-plugin.vapid_private_key', ''));
         if ($vapidSubject === '' || $vapidPublic === '' || $vapidPrivate === '') {
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.vapid_missing'))->danger()->send();
+
             return;
         }
 
@@ -147,6 +151,7 @@ class PwaBroadcast extends Page implements HasSchemas
 
         if ($title === '' || $body === '') {
             Notification::make()->title(trans('pwa-plugin::pwa-plugin.errors.broadcast_required'))->warning()->send();
+
             return;
         }
 
@@ -181,6 +186,7 @@ class PwaBroadcast extends Page implements HasSchemas
                 ->title(trans('pwa-plugin::pwa-plugin.errors.no_subscription'))
                 ->warning()
                 ->send();
+
             return;
         }
 
