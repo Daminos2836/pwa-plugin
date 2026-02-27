@@ -5,6 +5,7 @@ namespace PwaPlugin\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +51,7 @@ class PwaPushController extends Controller
                 'auth_token' => $request->input('keys.auth'),
                 'content_encoding' => $request->input('contentEncoding') ?? 'aesgcm',
                 'user_agent' => $request->userAgent(),
+                'last_synced_at' => now(),
             ],
         );
 
@@ -164,6 +166,182 @@ class PwaPushController extends Controller
             'sent' => $sent,
             'total' => $subscriptions->count(),
         ], $sent > 0 ? 200 : 500);
+    }
+
+    public function sync(Request $request, PwaSettingsRepository $settings): JsonResponse
+    {
+        $user = $this->resolveUser($request);
+        if (!$user) {
+            return response()->json([
+                'message' => trans('pwa-plugin::pwa-plugin.errors.unauthorized'),
+            ], 401);
+        }
+
+        if (!method_exists($user, 'notifications')) {
+            return response()->json([
+                'notifications' => [],
+                'count' => 0,
+                'server_time' => now()->toISOString(),
+            ]);
+        }
+
+        if (Schema::hasTable('pwa_push_subscriptions') && method_exists($user, 'getMorphClass')) {
+            PwaPushSubscription::query()
+                ->where('notifiable_type', $user->getMorphClass())
+                ->where('notifiable_id', $user->getKey())
+                ->update(['last_synced_at' => now()]);
+        }
+
+        $since = trim((string) $request->query('since', ''));
+        $limit = max(1, min((int) $request->query('limit', 20), 50));
+
+        $query = $user->notifications()
+            ->select(['id', 'data', 'created_at'])
+            ->orderBy('created_at', 'desc');
+
+        if ($since !== '') {
+            try {
+                $query->where('created_at', '>', Carbon::parse($since));
+            } catch (\Throwable) {
+                // Ignore invalid timestamps and continue with latest notifications.
+            }
+        }
+
+        $icon = $this->assetOrUrl($settings->get('default_notification_icon', config('pwa-plugin.default_notification_icon', '/pelican.svg')));
+        $badge = $this->assetOrUrl($settings->get('default_notification_badge', config('pwa-plugin.default_notification_badge', '/pelican.svg')));
+        $defaultTitle = config('app.name', 'Pelican');
+        $defaultBody = trans('pwa-plugin::pwa-plugin.messages.new_notification');
+
+        $notifications = $query
+            ->limit($limit)
+            ->get()
+            ->reverse()
+            ->map(function ($notification) use ($defaultTitle, $defaultBody, $icon, $badge): array {
+                $data = is_array($notification->data) ? $notification->data : [];
+
+                return [
+                    'id' => (string) $notification->id,
+                    'title' => $data['title'] ?? $data['subject'] ?? $defaultTitle,
+                    'body' => $data['body'] ?? $data['message'] ?? $defaultBody,
+                    'url' => $data['url'] ?? $data['action_url'] ?? url('/'),
+                    'icon' => $data['icon'] ?? $icon,
+                    'badge' => $data['badge'] ?? $badge,
+                    'tag' => $data['tag'] ?? ('sync-' . $notification->id),
+                    'requireInteraction' => (bool) ($data['require_interaction'] ?? false),
+                    'actions' => is_array($data['actions'] ?? null) ? $data['actions'] : [],
+                    'created_at' => optional($notification->created_at)?->toISOString(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $syncPoint = now()->toISOString();
+        if (!empty($notifications)) {
+            $last = $notifications[array_key_last($notifications)] ?? null;
+            if (is_array($last) && !empty($last['created_at'])) {
+                $syncPoint = (string) $last['created_at'];
+            }
+        }
+
+        return response()->json([
+            'notifications' => $notifications,
+            'count' => count($notifications),
+            'server_time' => now()->toISOString(),
+            'sync_point' => $syncPoint,
+        ]);
+    }
+
+    public function diagnostics(Request $request, PwaSettingsRepository $settings, PwaPushService $push): JsonResponse
+    {
+        $user = $this->resolveUser($request);
+        if (!$user) {
+            return response()->json([
+                'message' => trans('pwa-plugin::pwa-plugin.errors.unauthorized'),
+            ], 401);
+        }
+
+        $queueConnection = (string) config('queue.default', 'sync');
+        $queueConfigured = is_array(config("queue.connections.{$queueConnection}"));
+        $queueBackground = !in_array($queueConnection, ['sync', 'null'], true);
+
+        $vapid = [
+            'subject' => (string) $settings->get('vapid_subject', config('pwa-plugin.vapid_subject', '')),
+            'public' => (string) $settings->get('vapid_public_key', config('pwa-plugin.vapid_public_key', '')),
+            'private' => (string) $settings->get('vapid_private_key', config('pwa-plugin.vapid_private_key', '')),
+        ];
+
+        $pushEnabled = (bool) $settings->get('push_enabled', config('pwa-plugin.push_enabled', false));
+        $pushLibraryAvailable = $push->canSend();
+        $vapidConfigured = $vapid['subject'] !== '' && $vapid['public'] !== '' && $vapid['private'] !== '';
+
+        $globalSubscriptions = 0;
+        $globalUsers = 0;
+        $lastPushAt = null;
+        $lastSyncAt = null;
+        $lastSubscriptionRefreshAt = null;
+
+        if (Schema::hasTable('pwa_push_subscriptions')) {
+            $globalSubscriptions = PwaPushSubscription::query()->count();
+            $globalUsers = PwaPushSubscription::query()
+                ->select(['notifiable_type', 'notifiable_id'])
+                ->distinct()
+                ->get()
+                ->count();
+
+            if (Schema::hasColumn('pwa_push_subscriptions', 'last_push_sent_at')) {
+                $lastPushAt = $this->isoFromDatabaseValue(
+                    PwaPushSubscription::query()->max('last_push_sent_at')
+                );
+            }
+
+            if (Schema::hasColumn('pwa_push_subscriptions', 'last_synced_at')) {
+                $lastSyncAt = $this->isoFromDatabaseValue(
+                    PwaPushSubscription::query()->max('last_synced_at')
+                );
+            }
+
+            $lastSubscriptionRefreshAt = $this->isoFromDatabaseValue(
+                PwaPushSubscription::query()->max('updated_at')
+            );
+        }
+
+        return response()->json([
+            'queue' => [
+                'connection' => $queueConnection,
+                'configured' => $queueConfigured,
+                'background' => $queueBackground,
+                'ready' => $queueConfigured,
+            ],
+            'push' => [
+                'enabled' => $pushEnabled,
+                'library_available' => $pushLibraryAvailable,
+                'vapid_configured' => $vapidConfigured,
+                'ready' => $pushEnabled && $pushLibraryAvailable && $vapidConfigured,
+            ],
+            'usage' => [
+                'pwa_users' => $globalUsers,
+                'subscriptions' => $globalSubscriptions,
+            ],
+            'activity' => [
+                'last_push_sent_at' => $lastPushAt,
+                'last_sync_at' => $lastSyncAt,
+                'last_subscription_refresh_at' => $lastSubscriptionRefreshAt,
+            ],
+            'server_time' => now()->toISOString(),
+        ]);
+    }
+
+    private function isoFromDatabaseValue(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value)->toISOString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function resolveUser(Request $request): mixed

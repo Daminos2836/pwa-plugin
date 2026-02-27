@@ -19,8 +19,6 @@ class SendPwaPush implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public string $queue = 'push';
-
     /** @param array<string, mixed> $payload */
     public function __construct(
         private readonly int $subscriptionId,

@@ -8,9 +8,16 @@ return [
     'settings' => [
         'title' => 'PWA Einstellungen',
     ],
+    'broadcast' => [
+        'title' => 'An alle PWA-Benutzer senden',
+        'navigation_label' => 'An alle PWA-Benutzer senden',
+        'section_title' => 'An alle PWA-Benutzer senden',
+        'section_description' => 'Senden Sie eine Push-Benachrichtigung an alle aktiven PWA-Abonnements.',
+    ],
     'tabs' => [
         'manifest' => 'Manifest',
         'push' => 'Push-Benachrichtigungen',
+        'broadcast' => 'An alle PWA-Benutzer senden',
         'actions' => 'Aktionen',
     ],
     'fields' => [
@@ -39,7 +46,7 @@ return [
         ],
         'cache_precache_urls' => [
             'label' => 'Vorgecachete URLs',
-            'helper' => 'Kommagetrennte oder zeilenweise URLs zum Vercachen (z. B. /, /app).',
+            'helper' => 'Kommagetrennte oder zeilenweise URLs zum Vercachen (z. B. /, /).',
         ],
         'manifest_icon_192' => [
             'label' => 'Manifest-Icon (192x192)',
@@ -73,6 +80,36 @@ return [
             'label' => 'Push für E-Mail-Benachrichtigungen senden',
             'helper' => 'Sendet Push für Benachrichtigungen, die nur den E-Mail-Kanal nutzen.',
         ],
+        'push_notification_include_classes' => [
+            'label' => 'Benachrichtigungsklassen einschließen',
+            'helper' => 'Optional. Eine Klasse oder ein Wildcard-Muster pro Zeile/Komma. Wenn gesetzt, werden nur passende Klassen gesendet.',
+        ],
+        'push_notification_exclude_classes' => [
+            'label' => 'Benachrichtigungsklassen ausschließen',
+            'helper' => 'Optional. Eine Klasse oder ein Wildcard-Muster pro Zeile/Komma. Ausschlüsse haben immer Vorrang.',
+        ],
+        'broadcast_title' => [
+            'label' => 'Broadcast-Titel',
+        ],
+        'broadcast_body' => [
+            'label' => 'Broadcast-Nachricht',
+        ],
+        'broadcast_url' => [
+            'label' => 'Klick-URL',
+            'helper' => 'Zielseite, wenn ein Benutzer auf die Push-Benachrichtigung klickt.',
+        ],
+        'broadcast_icon' => [
+            'label' => 'Icon überschreiben (optional)',
+            'helper' => 'Optionales Icon nur für diesen Broadcast.',
+        ],
+        'broadcast_badge' => [
+            'label' => 'Badge überschreiben (optional)',
+            'helper' => 'Optionales Badge nur für diesen Broadcast.',
+        ],
+        'broadcast_require_interaction' => [
+            'label' => 'Interaktion erforderlich',
+            'helper' => 'Wenn aktiv, bleibt die Benachrichtigung sichtbar bis zur Interaktion.',
+        ],
         'vapid_subject' => [
             'label' => 'VAPID-Betreff',
             'helper' => 'Normalerweise eine mailto: oder https: URL, z. B. mailto:admin@beispiel.de',
@@ -98,6 +135,7 @@ return [
         'subscribe' => 'Push abonnieren',
         'unsubscribe' => 'Abmelden',
         'test_push' => 'Test-Push senden',
+        'send_broadcast' => 'Broadcast an alle senden',
         'save' => 'Speichern',
     ],
     'notifications' => [
@@ -105,6 +143,8 @@ return [
         'subscribed' => 'Push-Benachrichtigungen erfolgreich abonniert.',
         'unsubscribed' => 'Erfolgreich abgemeldet.',
         'test_sent' => 'Test-Benachrichtigung wurde gesendet.',
+        'broadcast_queued' => 'Broadcast für :count Abonnement(s) in die Queue gestellt.',
+        'broadcast_sent' => 'Broadcast an :sent von :total Abonnement(s) gesendet.',
     ],
     'errors' => [
         'table_missing' => 'Datenbanktabelle für Push-Abonnements fehlt.',
@@ -113,6 +153,8 @@ return [
         'vapid_missing' => 'VAPID-Schlüssel oder Betreff fehlen.',
         'no_subscription' => 'Kein Abonnement für diesen Browser gefunden.',
         'send_failed' => 'Senden der Benachrichtigung fehlgeschlagen.',
+        'push_disabled' => 'Push-Benachrichtigungen sind in den Einstellungen deaktiviert.',
+        'broadcast_required' => 'Broadcast-Titel und Nachricht sind erforderlich.',
         'unsupported' => 'Installation momentan nicht möglich. Die App ist eventuell bereits installiert oder Ihr Browser erfüllt die Anforderungen nicht.',
         'install_android_title' => 'Installation auf Android',
         'install_android_body' => 'Öffne das Browser-Menü und tippe auf „App installieren“ oder „Zum Startbildschirm hinzufügen“.',
@@ -125,6 +167,44 @@ return [
         'tab_label' => 'PWA',
         'section_heading' => 'PWA Aktionen',
         'section_description' => 'Verwalten Sie Ihre Geräteverbindung und Benachrichtigungen.',
+    ],
+    'diagnostics' => [
+        'title' => 'Sync Diagnostics',
+        'refresh' => 'Diagnose aktualisieren',
+        'unavailable' => 'nicht verfügbar',
+        'labels' => [
+            'overall_status' => 'Gesamtstatus',
+            'pwa_users' => 'PWA-Benutzer',
+            'active_subscriptions' => 'Aktive Abonnements',
+            'subscriptions_per_user' => 'Abonnements pro Benutzer',
+            'last_push_sent' => 'Letzter gesendeter Push',
+            'last_sync_server' => 'Letzte Synchronisierung (Server)',
+            'last_subscription_refresh_server' => 'Letzte Abo-Aktualisierung (Server)',
+            'queue_readiness' => 'Queue-Bereitschaft',
+            'push_stack' => 'Push-Stack',
+            'connection' => 'Verbindung',
+            'background' => 'Hintergrund',
+            'enabled' => 'aktiviert',
+            'library' => 'Bibliothek',
+            'vapid' => 'vapid',
+            'queue' => 'queue',
+            'push' => 'push',
+            'subscribers' => 'Abonnenten',
+            'activity' => 'Aktivität',
+        ],
+        'status' => [
+            'healthy' => 'gesund',
+            'needs_attention' => 'benötigt Aufmerksamkeit',
+            'ready' => 'bereit',
+            'not_ready' => 'nicht bereit',
+            'incomplete' => 'unvollständig',
+            'ok' => 'ok',
+            'issue' => 'Problem',
+            'none' => 'keine',
+            'yes' => 'ja',
+            'no' => 'nein',
+            'unknown' => 'unbekannt',
+        ],
     ],
     'messages' => [
         'update_available' => 'Eine neue Version ist verfügbar. Jetzt neu laden?',

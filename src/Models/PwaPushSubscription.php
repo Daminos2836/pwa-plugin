@@ -18,6 +18,13 @@ class PwaPushSubscription extends Model
         'auth_token',
         'content_encoding',
         'user_agent',
+        'last_synced_at',
+        'last_push_sent_at',
+    ];
+
+    protected $casts = [
+        'last_synced_at' => 'datetime',
+        'last_push_sent_at' => 'datetime',
     ];
 
     protected static function booted(): void

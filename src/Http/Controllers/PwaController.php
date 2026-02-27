@@ -50,7 +50,7 @@ class PwaController extends Controller
                     'name' => trans('pwa-plugin::pwa-plugin.manifest.shortcuts.dashboard_name'),
                     'short_name' => trans('pwa-plugin::pwa-plugin.manifest.shortcuts.dashboard_short'),
                     'description' => trans('pwa-plugin::pwa-plugin.manifest.shortcuts.dashboard_description'),
-                    'url' => url('/app'),
+                    'url' => url('/'),
                     'icons' => [
                         [
                             'src' => $this->assetOrUrl($icon192),
@@ -76,6 +76,7 @@ class PwaController extends Controller
         $swDefaultTitle = config('app.name', 'Pelican Panel');
         $swDefaultBody = trans('pwa-plugin::pwa-plugin.messages.new_notification');
         $swDefaultIcon = $this->setting('default_notification_icon', '/pelican.svg');
+        $swSyncRoute = '/pwa/sync';
 
         $serviceWorker = <<<'JS'
 const CACHE_NAME = '__CACHE_NAME__';
@@ -85,6 +86,9 @@ const PRECACHE_URLS = __PRECACHE_URLS__;
 const DEFAULT_TITLE = '__DEFAULT_TITLE__';
 const DEFAULT_BODY = '__DEFAULT_BODY__';
 const DEFAULT_ICON = '__DEFAULT_ICON__';
+const SYNC_ROUTE = '__SYNC_ROUTE__';
+const SYNC_STATE_CACHE = `${CACHE_NAME}:sync-state`;
+const SYNC_STATE_KEY = '/__pwa_sync_state__';
 
 // Install event - minimal setup
 self.addEventListener('install', (event) => {
@@ -196,21 +200,94 @@ self.addEventListener('fetch', (event) => {
     })());
 });
 
-// Background sync (optional - for future use)
 self.addEventListener('sync', (event) => {
     if (event.tag === 'sync-notifications') {
         event.waitUntil(syncNotifications());
     }
 });
 
+// Periodic background sync (where supported)
+self.addEventListener('periodicsync', (event) => {
+    if (event.tag === 'sync-notifications') {
+        event.waitUntil(syncNotifications());
+    }
+});
+
+// Manual trigger from controlled pages
+self.addEventListener('message', (event) => {
+    if (event && event.data && event.data.type === 'PWA_SYNC_NOTIFICATIONS') {
+        if (event.waitUntil) {
+            event.waitUntil(syncNotifications());
+        } else {
+            syncNotifications();
+        }
+    }
+});
+
+async function readSyncState() {
+    const cache = await caches.open(SYNC_STATE_CACHE);
+    const response = await cache.match(SYNC_STATE_KEY);
+    if (!response) return {};
+
+    try {
+        return await response.json();
+    } catch (_e) {
+        return {};
+    }
+}
+
+async function writeSyncState(state) {
+    const cache = await caches.open(SYNC_STATE_CACHE);
+    await cache.put(
+        SYNC_STATE_KEY,
+        new Response(JSON.stringify(state), {
+            headers: { 'Content-Type': 'application/json' },
+        })
+    );
+}
+
 async function syncNotifications() {
-    // Placeholder for future notification sync
-    console.log('PWA: Background sync triggered');
+    try {
+        const state = await readSyncState();
+        const hasLastSync = state && typeof state.lastSync === 'string' && state.lastSync !== '';
+        const since = hasLastSync ? `?since=${encodeURIComponent(state.lastSync)}&limit=20` : '?limit=20';
+        const response = await fetch(`${SYNC_ROUTE}${since}`, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+
+        if (!response.ok) return;
+
+        const payload = await response.json();
+        const notifications = payload && Array.isArray(payload.notifications) ? payload.notifications : [];
+
+        for (const item of notifications) {
+            const title = item && item.title ? item.title : DEFAULT_TITLE;
+            const options = {
+                body: item && item.body ? item.body : DEFAULT_BODY,
+                icon: item && item.icon ? item.icon : DEFAULT_ICON,
+                badge: item && item.badge ? item.badge : DEFAULT_ICON,
+                data: item && item.url ? item.url : '/',
+                tag: item && item.tag ? item.tag : `sync-${(item && item.id) ? item.id : Date.now()}`,
+                requireInteraction: Boolean(item && item.requireInteraction),
+                actions: item && Array.isArray(item.actions) ? item.actions : [],
+            };
+
+            await self.registration.showNotification(title, options);
+        }
+
+        await writeSyncState({
+            lastSync: (payload && (payload.sync_point || payload.server_time)) ? (payload.sync_point || payload.server_time) : new Date().toISOString(),
+        });
+    } catch (_e) {
+        // Ignore sync failures and retry on next background trigger.
+    }
 }
 JS;
 
         $serviceWorker = str_replace(
-            ['__CACHE_NAME__', '__CACHE_VERSION__', '__CACHE_ENABLED__', '__PRECACHE_URLS__', '__DEFAULT_TITLE__', '__DEFAULT_BODY__', '__DEFAULT_ICON__'],
+            ['__CACHE_NAME__', '__CACHE_VERSION__', '__CACHE_ENABLED__', '__PRECACHE_URLS__', '__DEFAULT_TITLE__', '__DEFAULT_BODY__', '__DEFAULT_ICON__', '__SYNC_ROUTE__'],
             [
                 addslashes($cacheName),
                 (string) $cacheVersion,
@@ -219,6 +296,7 @@ JS;
                 addslashes($swDefaultTitle),
                 addslashes($swDefaultBody),
                 addslashes($swDefaultIcon),
+                addslashes($swSyncRoute),
             ],
             $serviceWorker
         );

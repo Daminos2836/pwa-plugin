@@ -12,23 +12,47 @@ class PwaPluginRouteServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->routes(function (): void {
-            if (Route::has('pwa.manifest')) {
-                return;
+            if (!Route::has('pwa.manifest')) {
+                Route::middleware('web')->group(function () {
+                    Route::get('/manifest.json', [PwaController::class, 'manifest'])->name('pwa.manifest');
+                });
             }
 
-            Route::middleware('web')->group(function () {
-                Route::get('/manifest.json', [PwaController::class, 'manifest'])->name('pwa.manifest');
-                Route::get('/service-worker.js', [PwaController::class, 'serviceWorker'])->name('pwa.sw');
-            });
+            if (!Route::has('pwa.sw')) {
+                Route::middleware('web')->group(function () {
+                    Route::get('/service-worker.js', [PwaController::class, 'serviceWorker'])->name('pwa.sw');
+                });
+            }
 
-            Route::middleware(['web', 'auth', 'throttle:60,1'])->group(function () {
-                Route::post('/pwa/subscribe', [PwaPushController::class, 'subscribe'])->name('pwa.subscribe');
-                Route::post('/pwa/unsubscribe', [PwaPushController::class, 'unsubscribe'])->name('pwa.unsubscribe');
-            });
+            if (!Route::has('pwa.subscribe')) {
+                Route::middleware(['web', 'auth', 'throttle:60,1'])->group(function () {
+                    Route::post('/pwa/subscribe', [PwaPushController::class, 'subscribe'])->name('pwa.subscribe');
+                });
+            }
 
-            Route::middleware(['web', 'auth', 'throttle:10,1'])->group(function () {
-                Route::post('/pwa/test', [PwaPushController::class, 'test'])->name('pwa.test');
-            });
+            if (!Route::has('pwa.unsubscribe')) {
+                Route::middleware(['web', 'auth', 'throttle:60,1'])->group(function () {
+                    Route::post('/pwa/unsubscribe', [PwaPushController::class, 'unsubscribe'])->name('pwa.unsubscribe');
+                });
+            }
+
+            if (!Route::has('pwa.test')) {
+                Route::middleware(['web', 'auth', 'throttle:10,1'])->group(function () {
+                    Route::post('/pwa/test', [PwaPushController::class, 'test'])->name('pwa.test');
+                });
+            }
+
+            if (!Route::has('pwa.sync')) {
+                Route::middleware(['web', 'auth', 'throttle:30,1'])->group(function () {
+                    Route::get('/pwa/sync', [PwaPushController::class, 'sync'])->name('pwa.sync');
+                });
+            }
+
+            if (!Route::has('pwa.diagnostics')) {
+                Route::middleware(['web', 'auth', 'throttle:30,1'])->group(function () {
+                    Route::get('/pwa/diagnostics', [PwaPushController::class, 'diagnostics'])->name('pwa.diagnostics');
+                });
+            }
         });
     }
 }

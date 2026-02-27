@@ -5,6 +5,7 @@ namespace PwaPlugin\Filament\Pages;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\ColorPicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -12,11 +13,16 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Support\Enums\IconSize;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
+use PwaPlugin\Models\PwaPushSubscription;
 use PwaPlugin\Services\PwaActions;
+use PwaPlugin\Services\PwaPushService;
 use PwaPlugin\Services\PwaSettingsRepository;
 
 class PwaSettings extends Page implements HasSchemas
@@ -32,6 +38,7 @@ class PwaSettings extends Page implements HasSchemas
     protected static ?int $navigationSort = 90;
 
     public ?array $data = [];
+    public array $syncDiagnostics = [];
 
     public function hasLogo(): bool
     {
@@ -68,7 +75,7 @@ class PwaSettings extends Page implements HasSchemas
         return 'data';
     }
 
-    public function mount(PwaSettingsRepository $settings): void
+    public function mount(PwaSettingsRepository $settings, PwaPushService $push): void
     {
         $settings->ensureVapidKeys();
 
@@ -99,6 +106,7 @@ class PwaSettings extends Page implements HasSchemas
         $values = $settings->allWithDefaults($defaults);
         $this->data = $values;
         $this->form->fill($values);
+        $this->refreshSyncDiagnostics($settings, $push);
     }
 
     protected function getFormSchema(): array
@@ -224,6 +232,36 @@ class PwaSettings extends Page implements HasSchemas
                         ->icon('heroicon-o-command-line')
                         ->schema([
                             PwaActions::make(),
+                            Section::make(trans('pwa-plugin::pwa-plugin.diagnostics.title'))
+                                ->schema([
+                                    Placeholder::make('diag_overall_status')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.overall_status'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['overall_status'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_pwa_users')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.pwa_users'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['pwa_users'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_active_subscriptions')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.active_subscriptions'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['active_subscriptions'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_subscriptions_per_user')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.subscriptions_per_user'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['subscriptions_per_user'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_last_push_sent')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.last_push_sent'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['last_push_sent'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_last_sync_server')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.last_sync_server'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['last_sync_server'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_last_subscription_refresh_server')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.last_subscription_refresh_server'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['last_subscription_refresh_server'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_queue_readiness')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.queue_readiness'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['queue_readiness'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                    Placeholder::make('diag_push_stack')
+                                        ->label(trans('pwa-plugin::pwa-plugin.diagnostics.labels.push_stack'))
+                                        ->content(fn (): string => (string) ($this->syncDiagnostics['push_stack'] ?? trans('pwa-plugin::pwa-plugin.diagnostics.unavailable'))),
+                                ]),
                         ]),
                 ])
                 ->persistTabInQueryString(),
@@ -241,7 +279,18 @@ class PwaSettings extends Page implements HasSchemas
                 ->action('save')
                 ->authorize(fn () => user()?->can('update settings'))
                 ->keyBindings(['mod+s']),
+            Action::make('refresh_sync_diagnostics')
+                ->label(trans('pwa-plugin::pwa-plugin.diagnostics.refresh'))
+                ->icon('heroicon-o-arrow-path')
+                ->color('gray')
+                ->action('refreshSyncDiagnostics')
+                ->authorize(fn () => user()?->can('update settings')),
         ];
+    }
+
+    public function refreshSyncDiagnostics(PwaSettingsRepository $settings, PwaPushService $push): void
+    {
+        $this->syncDiagnostics = $this->buildSyncDiagnostics($settings, $push);
     }
 
     public function save(PwaSettingsRepository $settings): void
@@ -297,5 +346,125 @@ class PwaSettings extends Page implements HasSchemas
     private function applyUploads(array &$state): void
     {
         // No-op: uploads removed.
+    }
+
+    private function buildSyncDiagnostics(PwaSettingsRepository $settings, PwaPushService $push): array
+    {
+        $unavailable = trans('pwa-plugin::pwa-plugin.diagnostics.unavailable');
+
+        try {
+            $queueConnection = (string) config('queue.default', 'sync');
+            $queueConfigured = is_array(config("queue.connections.{$queueConnection}"));
+            $queueBackground = !in_array($queueConnection, ['sync', 'null'], true);
+
+            $vapidSubject = (string) $settings->get('vapid_subject', config('pwa-plugin.vapid_subject', ''));
+            $vapidPublic = (string) $settings->get('vapid_public_key', config('pwa-plugin.vapid_public_key', ''));
+            $vapidPrivate = (string) $settings->get('vapid_private_key', config('pwa-plugin.vapid_private_key', ''));
+
+            $pushEnabled = (bool) $settings->get('push_enabled', config('pwa-plugin.push_enabled', false));
+            $pushLibraryAvailable = $push->canSend();
+            $vapidConfigured = $vapidSubject !== '' && $vapidPublic !== '' && $vapidPrivate !== '';
+            $pushReady = $pushEnabled && $pushLibraryAvailable && $vapidConfigured;
+
+            $globalSubscriptions = 0;
+            $globalUsers = 0;
+            $lastPushAt = null;
+            $lastSyncAt = null;
+            $lastSubscriptionRefreshAt = null;
+
+            if (Schema::hasTable('pwa_push_subscriptions')) {
+                $globalSubscriptions = PwaPushSubscription::query()->count();
+                $globalUsers = PwaPushSubscription::query()
+                    ->select(['notifiable_type', 'notifiable_id'])
+                    ->distinct()
+                    ->get()
+                    ->count();
+
+                if (Schema::hasColumn('pwa_push_subscriptions', 'last_push_sent_at')) {
+                    $lastPushAt = $this->formatDiagnosticsDate(
+                        PwaPushSubscription::query()->max('last_push_sent_at')
+                    );
+                }
+
+                if (Schema::hasColumn('pwa_push_subscriptions', 'last_synced_at')) {
+                    $lastSyncAt = $this->formatDiagnosticsDate(
+                        PwaPushSubscription::query()->max('last_synced_at')
+                    );
+                }
+
+                $lastSubscriptionRefreshAt = $this->formatDiagnosticsDate(
+                    PwaPushSubscription::query()->max('updated_at')
+                );
+            }
+
+            $subscriptionsPerUser = $globalUsers > 0 ? number_format($globalSubscriptions / $globalUsers, 2) : '0.00';
+
+            $queueStatus = $queueConfigured
+                ? trans('pwa-plugin::pwa-plugin.diagnostics.status.ready')
+                : trans('pwa-plugin::pwa-plugin.diagnostics.status.not_ready');
+
+            $pushStatus = $pushReady
+                ? trans('pwa-plugin::pwa-plugin.diagnostics.status.ready')
+                : trans('pwa-plugin::pwa-plugin.diagnostics.status.incomplete');
+
+            $hasRecentActivity = $lastPushAt !== null || $lastSyncAt !== null;
+            $hasSubscribers = $globalSubscriptions > 0;
+            $healthy = $queueConfigured && $pushReady && $hasSubscribers && $hasRecentActivity;
+
+            return [
+                'overall_status' => $healthy
+                    ? trans('pwa-plugin::pwa-plugin.diagnostics.status.healthy')
+                    : trans('pwa-plugin::pwa-plugin.diagnostics.status.needs_attention'),
+                'pwa_users' => (string) $globalUsers,
+                'active_subscriptions' => (string) $globalSubscriptions,
+                'subscriptions_per_user' => $subscriptionsPerUser,
+                'last_push_sent' => $lastPushAt ?? $unavailable,
+                'last_sync_server' => $lastSyncAt ?? $unavailable,
+                'last_subscription_refresh_server' => $lastSubscriptionRefreshAt ?? $unavailable,
+                'queue_readiness' => sprintf(
+                    '%s (%s: %s, %s: %s)',
+                    $queueStatus,
+                    trans('pwa-plugin::pwa-plugin.diagnostics.labels.connection'),
+                    $queueConnection,
+                    trans('pwa-plugin::pwa-plugin.diagnostics.labels.background'),
+                    $queueBackground ? trans('pwa-plugin::pwa-plugin.diagnostics.status.yes') : trans('pwa-plugin::pwa-plugin.diagnostics.status.no'),
+                ),
+                'push_stack' => sprintf(
+                    '%s (%s: %s, %s: %s, %s: %s)',
+                    $pushStatus,
+                    trans('pwa-plugin::pwa-plugin.diagnostics.labels.enabled'),
+                    $pushEnabled ? trans('pwa-plugin::pwa-plugin.diagnostics.status.yes') : trans('pwa-plugin::pwa-plugin.diagnostics.status.no'),
+                    trans('pwa-plugin::pwa-plugin.diagnostics.labels.library'),
+                    $pushLibraryAvailable ? trans('pwa-plugin::pwa-plugin.diagnostics.status.yes') : trans('pwa-plugin::pwa-plugin.diagnostics.status.no'),
+                    trans('pwa-plugin::pwa-plugin.diagnostics.labels.vapid'),
+                    $vapidConfigured ? trans('pwa-plugin::pwa-plugin.diagnostics.status.yes') : trans('pwa-plugin::pwa-plugin.diagnostics.status.no'),
+                ),
+            ];
+        } catch (\Throwable) {
+            return [
+                'overall_status' => $unavailable,
+                'pwa_users' => $unavailable,
+                'active_subscriptions' => $unavailable,
+                'subscriptions_per_user' => $unavailable,
+                'last_push_sent' => $unavailable,
+                'last_sync_server' => $unavailable,
+                'last_subscription_refresh_server' => $unavailable,
+                'queue_readiness' => $unavailable,
+                'push_stack' => $unavailable,
+            ];
+        }
+    }
+
+    private function formatDiagnosticsDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value)->toDateTimeString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

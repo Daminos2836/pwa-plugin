@@ -6,7 +6,6 @@ use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
-use PwaPlugin\Jobs\SendPwaPush;
 use PwaPlugin\Models\PwaPushSubscription;
 use PwaPlugin\Services\PwaPushService;
 use PwaPlugin\Services\PwaSettingsRepository;
@@ -71,13 +70,13 @@ class SendPwaPushOnDatabaseNotification
             return;
         }
 
-        $subscriptionIds = PwaPushSubscription::query()
+        $subscriptions = PwaPushSubscription::query()
             ->where('notifiable_type', $notifiable->getMorphClass())
             ->where('notifiable_id', $notifiable->getKey())
-            ->pluck('id');
+            ->get();
 
-        foreach ($subscriptionIds as $subscriptionId) {
-            SendPwaPush::dispatch($subscriptionId, $payload)->onQueue('push');
+        foreach ($subscriptions as $subscription) {
+            $this->push->sendToSubscription($subscription, $payload, $vapid);
         }
     }
 
@@ -133,7 +132,7 @@ class SendPwaPushOnDatabaseNotification
         $payload = [
             'title' => $title,
             'body' => $body,
-            'url' => $mail->actionUrl ?: url('/app'),
+            'url' => $mail->actionUrl ?: url('/'),
         ];
 
         if ($mail->actionText && $mail->actionUrl) {
@@ -155,7 +154,7 @@ class SendPwaPushOnDatabaseNotification
 
         $title = $data['title'] ?? $data['subject'] ?? $defaultTitle;
         $body = $data['body'] ?? $data['message'] ?? $defaultBody;
-        $url = $data['url'] ?? $data['action_url'] ?? url('/app');
+        $url = $data['url'] ?? $data['action_url'] ?? url('/');
 
         $icon = $this->assetOrUrl($this->settings->get('default_notification_icon', config('pwa-plugin.default_notification_icon', '/pelican.svg')));
         $badge = $this->assetOrUrl($this->settings->get('default_notification_badge', config('pwa-plugin.default_notification_badge', '/pelican.svg')));

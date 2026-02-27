@@ -8,9 +8,16 @@ return [
     'settings' => [
         'title' => 'PWA-instellingen',
     ],
+    'broadcast' => [
+        'title' => 'Naar alle PWA-gebruikers verzenden',
+        'navigation_label' => 'Naar alle PWA-gebruikers verzenden',
+        'section_title' => 'Naar alle PWA-gebruikers verzenden',
+        'section_description' => 'Stuur een pushmelding naar alle actieve PWA-abonnementen.',
+    ],
     'tabs' => [
         'manifest' => 'Manifest',
         'push' => 'Pushmeldingen',
+        'broadcast' => 'Naar alle PWA-gebruikers verzenden',
         'actions' => 'Acties',
     ],
     'fields' => [
@@ -39,7 +46,7 @@ return [
         ],
         'cache_precache_urls' => [
             'label' => 'URL’s voor caching',
-            'helper' => 'Door komma’s of nieuwe regels gescheiden lijst met URL’s om in de cache op te slaan (bijv. /, /app).',
+            'helper' => 'Door komma’s of nieuwe regels gescheiden lijst met URL’s om in de cache op te slaan (bijv. /, /).',
         ],
         'manifest_icon_192' => [
             'label' => 'Manifest-icoon (192x192)',
@@ -73,6 +80,36 @@ return [
             'label' => 'Pushmeldingen verzenden bij e-mailmeldingen',
             'helper' => 'Verstuurt pushmeldingen voor meldingen die alleen via e-mail worden verzonden.',
         ],
+        'push_notification_include_classes' => [
+            'label' => 'Meldingsklassen opnemen',
+            'helper' => 'Optioneel. Een klasse of wildcard-patroon per regel/komma. Indien ingesteld, worden alleen overeenkomende klassen verzonden.',
+        ],
+        'push_notification_exclude_classes' => [
+            'label' => 'Meldingsklassen uitsluiten',
+            'helper' => 'Optioneel. Een klasse of wildcard-patroon per regel/komma. Uitsluitingen hebben altijd voorrang.',
+        ],
+        'broadcast_title' => [
+            'label' => 'Broadcast-titel',
+        ],
+        'broadcast_body' => [
+            'label' => 'Broadcast-bericht',
+        ],
+        'broadcast_url' => [
+            'label' => 'Klik-URL',
+            'helper' => 'Waar gebruikers heen gaan als ze op de pushmelding klikken.',
+        ],
+        'broadcast_icon' => [
+            'label' => 'Icoon overschrijven (optioneel)',
+            'helper' => 'Optioneel icoon alleen voor deze broadcast.',
+        ],
+        'broadcast_badge' => [
+            'label' => 'Badge overschrijven (optioneel)',
+            'helper' => 'Optionele badge alleen voor deze broadcast.',
+        ],
+        'broadcast_require_interaction' => [
+            'label' => 'Interactie vereist',
+            'helper' => 'Indien ingeschakeld blijft de melding zichtbaar tot de gebruiker reageert.',
+        ],
         'vapid_subject' => [
             'label' => 'VAPID-onderwerp',
             'helper' => 'Meestal mailto: of een https:-URL, bijv. mailto:admin@example.com',
@@ -98,6 +135,7 @@ return [
         'subscribe' => 'Abonneren op push',
         'unsubscribe' => 'Afmelden',
         'test_push' => 'Test-push verzenden',
+        'send_broadcast' => 'Broadcast naar iedereen verzenden',
         'save' => 'Opslaan',
     ],
     'notifications' => [
@@ -105,6 +143,8 @@ return [
         'subscribed' => 'Succesvol geabonneerd op pushmeldingen.',
         'unsubscribed' => 'Succesvol afgemeld.',
         'test_sent' => 'Testmelding is verzonden.',
+        'broadcast_queued' => 'Broadcast in wachtrij geplaatst voor :count abonnement(en).',
+        'broadcast_sent' => 'Broadcast verzonden naar :sent van :total abonnement(en).',
     ],
     'errors' => [
         'table_missing' => 'Push-abonnementstabel niet gevonden.',
@@ -113,6 +153,8 @@ return [
         'vapid_missing' => 'VAPID-sleutels of onderwerp niet gevonden.',
         'no_subscription' => 'Geen abonnement gevonden voor deze browser.',
         'send_failed' => 'Verzenden van melding mislukt.',
+        'push_disabled' => 'Pushmeldingen zijn uitgeschakeld in de instellingen.',
+        'broadcast_required' => 'Broadcast-titel en bericht zijn verplicht.',
         'unsupported' => 'Installatie is momenteel niet mogelijk. De app is mogelijk al geïnstalleerd of je browser voldoet niet aan de vereisten.',
         'install_android_title' => 'Installeren op Android',
         'install_android_body' => 'Open het browsermenu en kies “App installeren” of “Toevoegen aan startscherm”.',
@@ -125,6 +167,44 @@ return [
         'tab_label' => 'PWA',
         'section_heading' => 'PWA-acties',
         'section_description' => 'Beheer je gekoppelde apparaten en meldingen.',
+    ],
+    'diagnostics' => [
+        'title' => 'Sync Diagnostics',
+        'refresh' => 'Diagnostiek vernieuwen',
+        'unavailable' => 'niet beschikbaar',
+        'labels' => [
+            'overall_status' => 'Algemene status',
+            'pwa_users' => 'PWA-gebruikers',
+            'active_subscriptions' => 'Actieve abonnementen',
+            'subscriptions_per_user' => 'Abonnementen per gebruiker',
+            'last_push_sent' => 'Laatst verzonden push',
+            'last_sync_server' => 'Laatste synchronisatie (server)',
+            'last_subscription_refresh_server' => 'Laatste abonnementsverversing (server)',
+            'queue_readiness' => 'Queue-gereedheid',
+            'push_stack' => 'Push-stack',
+            'connection' => 'verbinding',
+            'background' => 'achtergrond',
+            'enabled' => 'ingeschakeld',
+            'library' => 'bibliotheek',
+            'vapid' => 'vapid',
+            'queue' => 'queue',
+            'push' => 'push',
+            'subscribers' => 'abonnees',
+            'activity' => 'activiteit',
+        ],
+        'status' => [
+            'healthy' => 'gezond',
+            'needs_attention' => 'vereist aandacht',
+            'ready' => 'klaar',
+            'not_ready' => 'niet klaar',
+            'incomplete' => 'onvolledig',
+            'ok' => 'ok',
+            'issue' => 'probleem',
+            'none' => 'geen',
+            'yes' => 'ja',
+            'no' => 'nee',
+            'unknown' => 'onbekend',
+        ],
     ],
     'messages' => [
         'update_available' => 'Er is een nieuwe versie beschikbaar. Nu vernieuwen?',

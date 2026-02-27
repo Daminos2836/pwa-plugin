@@ -43,6 +43,10 @@ class PwaPushService
             }
         }
 
+        $subscription->forceFill([
+            'last_push_sent_at' => now(),
+        ])->saveQuietly();
+
         return true;
     }
 }

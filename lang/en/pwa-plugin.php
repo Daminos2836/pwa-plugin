@@ -8,9 +8,16 @@ return [
     'settings' => [
         'title' => 'PWA Settings',
     ],
+    'broadcast' => [
+        'title' => 'Broadcast to all PWA users',
+        'navigation_label' => 'Broadcast Push',
+        'section_title' => 'Broadcast Push',
+        'section_description' => 'Send a push notification to all active PWA subscriptions.',
+    ],
     'tabs' => [
         'manifest' => 'Manifest',
         'push' => 'Push Notifications',
+        'broadcast' => 'Broadcast Push',
         'actions' => 'Actions',
     ],
     'fields' => [
@@ -39,7 +46,7 @@ return [
         ],
         'cache_precache_urls' => [
             'label' => 'Precache URLs',
-            'helper' => 'Comma or newline separated list of URLs to precache (e.g. /, /app).',
+            'helper' => 'Comma or newline separated list of URLs to precache (e.g. /, /).',
         ],
         'manifest_icon_192' => [
             'label' => 'Manifest icon (192x192)',
@@ -73,6 +80,28 @@ return [
             'label' => 'Send push for mail notifications',
             'helper' => 'Sends push for notifications that only use the mail channel.',
         ],
+        'broadcast_title' => [
+            'label' => 'Broadcast title',
+        ],
+        'broadcast_body' => [
+            'label' => 'Broadcast message',
+        ],
+        'broadcast_url' => [
+            'label' => 'Click URL',
+            'helper' => 'Where users are opened when they click the push notification.',
+        ],
+        'broadcast_icon' => [
+            'label' => 'Override icon (optional)',
+            'helper' => 'Optional icon URL/path for this broadcast only.',
+        ],
+        'broadcast_badge' => [
+            'label' => 'Override badge (optional)',
+            'helper' => 'Optional badge URL/path for this broadcast only.',
+        ],
+        'broadcast_require_interaction' => [
+            'label' => 'Require interaction',
+            'helper' => 'If enabled, the notification stays visible until the user interacts.',
+        ],
         'vapid_subject' => [
             'label' => 'VAPID subject',
             'helper' => 'Usually a mailto: or https: URL, e.g. mailto:admin@example.com',
@@ -98,6 +127,7 @@ return [
         'subscribe' => 'Subscribe Push',
         'unsubscribe' => 'Unsubscribe',
         'test_push' => 'Send Test Push',
+        'send_broadcast' => 'Send Broadcast To All',
         'save' => 'Save',
     ],
     'notifications' => [
@@ -105,6 +135,7 @@ return [
         'subscribed' => 'Successfully subscribed to push notifications.',
         'unsubscribed' => 'Successfully unsubscribed.',
         'test_sent' => 'Test notification has been sent.',
+        'broadcast_queued' => 'Broadcast queued for :count subscription(s).',
     ],
     'errors' => [
         'table_missing' => 'Push subscriptions table is missing.',
@@ -113,6 +144,8 @@ return [
         'vapid_missing' => 'VAPID keys or subject are missing.',
         'no_subscription' => 'No subscription found for this browser.',
         'send_failed' => 'Failed to send notification.',
+        'push_disabled' => 'Push notifications are disabled in settings.',
+        'broadcast_required' => 'Broadcast title and message are required.',
         'unsupported' => 'Installation is currently not possible. The app may already be installed or your browser does not meet the requirements.',
         'install_android_title' => 'Install on Android',
         'install_android_body' => 'Open the browser menu and tap "Install app" or "Add to Home screen".',
@@ -125,6 +158,46 @@ return [
         'tab_label' => 'PWA',
         'section_heading' => 'PWA Actions',
         'section_description' => 'Manage your device connection and notifications.',
+    ],
+    'diagnostics' => [
+        'title' => 'Sync Diagnostics',
+        'refresh' => 'Refresh Diagnostics',
+        'loading' => 'Loading diagnostics...',
+        'checking' => 'checking...',
+        'unavailable' => 'unavailable',
+        'labels' => [
+            'overall_status' => 'Overall status',
+            'pwa_users' => 'PWA users',
+            'active_subscriptions' => 'Active subscriptions',
+            'subscriptions_per_user' => 'Subscriptions per user',
+            'last_push_sent' => 'Last push sent',
+            'last_sync_server' => 'Last sync (server)',
+            'last_subscription_refresh_server' => 'Last subscription refresh (server)',
+            'queue_readiness' => 'Queue readiness',
+            'push_stack' => 'Push stack',
+            'connection' => 'connection',
+            'background' => 'background',
+            'enabled' => 'enabled',
+            'library' => 'library',
+            'vapid' => 'vapid',
+            'queue' => 'queue',
+            'push' => 'push',
+            'subscribers' => 'subscribers',
+            'activity' => 'activity',
+        ],
+        'status' => [
+            'healthy' => 'healthy',
+            'needs_attention' => 'needs attention',
+            'ready' => 'ready',
+            'not_ready' => 'not ready',
+            'incomplete' => 'incomplete',
+            'ok' => 'ok',
+            'issue' => 'issue',
+            'none' => 'none',
+            'yes' => 'yes',
+            'no' => 'no',
+            'unknown' => 'unknown',
+        ],
     ],
     'messages' => [
         'update_available' => 'A new version is available. Reload now?',
