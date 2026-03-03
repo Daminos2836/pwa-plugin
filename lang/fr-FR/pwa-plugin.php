@@ -139,7 +139,7 @@ return [
         'broadcast_sent' => 'Diffusion envoyée à :sent sur :total abonnement(s).',
     ],
     'errors' => [
-        'table_missing' => 'Le table des abonnements push est manquant.',
+        'table_missing' => 'La table des abonnements push est manquante.',
         'unauthorized' => 'Accès non autorisé.',
         'library_missing' => 'La bibliothèque Web Push est introuvable.',
         'vapid_missing' => 'Les clés VAPID ou le sujet sont manquants.',
